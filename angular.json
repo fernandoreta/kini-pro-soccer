@@ -3,7 +3,7 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "monk-liga-mx": {
+    "kini-pro": {
       "projectType": "application",
       "schematics": {
         "@schematics/angular:component": {
@@ -63,10 +63,10 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "monk-liga-mx:build:production"
+              "buildTarget": "kini-pro:build:production"
             },
             "development": {
-              "buildTarget": "monk-liga-mx:build:development"
+              "buildTarget": "kini-pro:build:development"
             }
           },
           "defaultConfiguration": "development"
