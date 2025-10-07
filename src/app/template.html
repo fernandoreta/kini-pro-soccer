@@ -1,0 +1,243 @@
+<div class="app-container">
+    <!-- Encabezado Fijo -->
+    <header class="header-fixed">
+    <div class="header-top-bar">
+        <div class="header-title">Liga MX Pick'Em</div>
+        <div class="header-subtitle">Jornada {{ selectedWeek() }}</div>
+    </div>
+    </header>
+
+    <!-- Contenido Principal -->
+    <main class="main-content">
+    
+    <!-- Vista INICIO -->
+    @if (activeTab() === 'HOME') {
+        <div class="content-section">
+        <h2 class="section-title text-green-400">Inicio: Resumen de la Liga</h2>
+        <div class="home-card">
+            <p class="text-lg font-semibold mb-2">¡Bienvenido de vuelta!</p>
+            <p class="text-gray-400 mb-4">El Clausura está que arde. Revisa tus pronósticos para la jornada actual y no te quedes fuera de la pelea.</p>
+            
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <span class="stat-value">Jornada {{ selectedWeek() }}</span>
+                    <span class="stat-label">Actual</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value text-yellow-500">{{ mockProfile.totalPicks }}/72</span>
+                    <span class="stat-label">Partidos Totales</span>
+                </div>
+            </div>
+
+            <h3 class="section-subtitle">Últimas Noticias (Mock)</h3>
+            <ul class="news-list">
+                <li><span class="text-green-400 font-bold">CRUZ AZUL:</span> Asegura el liderato con una victoria de último minuto.</li>
+                <li><span class="text-red-400 font-bold">AMÉRICA:</span> Empata en un clásico polémico.</li>
+                <li><span class="text-blue-400 font-bold">MONTERREY:</span> Su entrenador es baja por lesión.</li>
+            </ul>
+        </div>
+        </div>
+    }
+
+    <!-- Vista PRONÓSTICOS (PICKEM) -->
+    @if (activeTab() === 'PICKEM') {
+        <div class="content-section">
+        <!-- Selector de Jornada -->
+        <div class="week-selector-scroll">
+            @for (week of weeks(); track week) {
+            <button 
+                (click)="selectWeek(week)"
+                [class.week-active]="selectedWeek() === week"
+                [class.week-inactive]="selectedWeek() !== week"
+                class="week-button"
+            >
+                Jornada {{ week }}
+            </button>
+            }
+        </div>
+
+        <!-- Título de Próximos Partidos / Resultados -->
+        <h2 class="section-title">
+            {{ selectedWeekStatus() === 'FINISHED' ? 'Resultados Finales' : 'Próximos Partidos' }}
+        </h2>
+        
+        <!-- Lista de Partidos -->
+        <div class="match-grid">
+            @for (match of filteredMatches(); track match.id) {
+            <div class="match-card">
+                <div class="match-info-top">
+                <span class="text-xs">{{ match.date }} | {{ match.time }}</span>
+                <!-- Indicador de pick -->
+                @if (isPicked(match.id)) {
+                    <span class="pick-indicator">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                    Elegido
+                    </span>
+                } @else if (match.status === 'FINISHED') {
+                        <span class="pick-indicator-missed">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 mr-1">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.86-1.55-.42-3.323.085-4.57.505-1.246 1.155-2.227 1.954-2.924a7.923 7.923 0 015.65-2.126 7.923 7.923 0 015.65 2.126c.799.697 1.449 1.678 1.954 2.924.505 1.246.945 3.02.085 4.57-1.045 1.88-2.67 3.238-4.524 3.96C14.777 20.485 13.43 20.75 12 20.75c-1.43 0-2.777-.265-4.04-1.014-1.854-.722-3.479-2.08-4.524-3.96zM12 15h.01" />
+                        </svg>
+                        Juego Terminado
+                    </span>
+                }
+                </div>
+                
+                <!-- Contenedor del Partido -->
+                <div class="match-teams-container">
+                
+                <!-- Equipo Local -->
+                <div 
+                    (click)="match.status === 'SCHEDULED' && makePick(match.id, match.homeTeam.id)"
+                    [class.pick-ring-active]="getPick(match.id) === match.homeTeam.id"
+                    [class.cursor-not-allowed]="match.status === 'FINISHED'"
+                    class="team-pick-area"
+                >
+                    <img 
+                        [src]="match.homeTeam.logoUrl" 
+                        [alt]="match.homeTeam.shortName + ' logo'" 
+                        class="team-logo"
+                        onerror="this.onerror=null;this.src='https://placehold.co/100x100/374151/FFF?text=N/A';"
+                    >
+                    <!-- CONDICIONAL: Marcador o Probabilidad -->
+                    @if (match.status === 'FINISHED') {
+                        <span class="match-score match-score-home" 
+                            [class.score-winner]="match.homeScore! > match.awayScore!"
+                        >
+                            {{ match.homeScore }}
+                        </span>
+                    } @else {
+                        <span class="team-prob">
+                        {{ match.homeProb }}% prob.
+                        </span>
+                    }
+                    <!-- FIN CONDICIONAL -->
+                    <span class="team-name">{{ match.homeTeam.shortName }}</span>
+                    <span class="team-record">{{ match.homeTeam.record }} Pts</span>
+                </div>
+
+                <!-- Separador / VS -->
+                <div class="match-vs-separator">VS</div>
+
+                <!-- Equipo Visitante -->
+                <div 
+                    (click)="match.status === 'SCHEDULED' && makePick(match.id, match.awayTeam.id)"
+                    [class.pick-ring-active]="getPick(match.id) === match.awayTeam.id"
+                    [class.cursor-not-allowed]="match.status === 'FINISHED'"
+                    class="team-pick-area"
+                >
+                    <img 
+                        [src]="match.awayTeam.logoUrl" 
+                        [alt]="match.awayTeam.shortName + ' logo'" 
+                        class="team-logo"
+                        onerror="this.onerror=null;this.src='https://placehold.co/100x100/374151/FFF?text=N/A';"
+                    >
+                    <!-- CONDICIONAL: Marcador o Probabilidad -->
+                    @if (match.status === 'FINISHED') {
+                        <span class="match-score match-score-away"
+                            [class.score-winner]="match.awayScore! > match.homeScore!"
+                        >
+                            {{ match.awayScore }}
+                        </span>
+                    } @else {
+                        <span class="team-prob">
+                        {{ match.awayProb }}% prob.
+                        </span>
+                    }
+                    <!-- FIN CONDICIONAL -->
+                    <span class="team-name">{{ match.awayTeam.shortName }}</span>
+                    <span class="team-record">{{ match.awayTeam.record }} Pts</span>
+                </div>
+
+                </div>
+                
+                <!-- Iconos de Interacción -->
+                <div class="match-interaction-bar">
+                <span class="match-interaction-item">
+                    <!-- Ojo - Vistas -->
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 mr-1">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.433 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {{ match.id * 3 + 12 }}.3K
+                </span>
+                <span class="match-interaction-item-highlight">
+                    <!-- Fuego - Interacciones -->
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="w-5 h-5 mr-1">
+                    <path d="M12 21.5c1.4 0 2.5-.5 3.5-1.5s1.5-2.2 1.5-3.5c0-1.2-.5-2.2-1.5-3.2s-2.2-1.5-3.5-1.5c-1.3 0-2.4.5-3.5 1.5s-1.5 2.2-1.5 3.5c0 1.2.5 2.2 1.5 3.2s2.2 1.5 3.5 1.5zm-5.7-10.7c.3-.5.7-1.1 1.2-1.6s1.1-.9 1.7-1.2c.5-.3 1.1-.5 1.7-.5.7 0 1.2.1 1.8.4.6.3 1.1.7 1.6 1.2.5.5.9 1.1 1.2 1.7.3.6.4 1.2.4 1.8 0 .7-.1 1.3-.4 1.9-.3.6-.7 1.1-1.2 1.6s-1.1.9-1.7 1.2c-.6.3-1.2.4-1.8.4-.7 0-1.3-.1-1.9-.4-.6-.3-1.1-.7-1.6-1.2-.5-.5-.9-1.1-1.2-1.7-.3-.6-.4-1.2-.4-1.8 0-.6.1-1.2.4-1.7zm13.1 3.5c-.3.6-.8 1.1-1.4 1.5s-1.4.6-2.2.6c-.8 0-1.6-.2-2.3-.6s-1.3-.9-1.8-1.5c-.5-.6-.8-1.3-.9-2.1-.1-.8 0-1.6.2-2.3.2-.7.6-1.4 1.1-2s1.1-1 1.8-1.4c.7-.4 1.4-.6 2.2-.6.8 0 1.5.2 2.2.6s1.3.9 1.8 1.5c.5.6.8 1.3.9 2.1.1.8 0 1.6-.2 2.3z"/>
+                    </svg>
+                    {{ match.id * 2 + 5 }}
+                </span>
+                </div>
+            </div>
+            }
+            @if (filteredMatches().length === 0) {
+            <p class="no-matches-text">
+                No hay partidos para la Jornada {{ selectedWeek() }}.
+            </p>
+            }
+        </div>
+        </div>
+    }
+
+    <!-- Vista PERFIL -->
+    @if (activeTab() === 'PROFILE') {
+        <div class="content-section">
+        <div class="profile-card">
+            <h2 class="section-title text-blue-400">Mi Perfil Pick'Em</h2>
+            
+            <div class="profile-header">
+            <div class="profile-avatar">
+                {{ mockProfile.name.charAt(0) }}
+            </div>
+            <div class="profile-info">
+                <span class="profile-name">{{ mockProfile.name }}</span>
+                <span class="profile-rank">Ranking Global: #{{ mockProfile.ranking }}</span>
+            </div>
+            </div>
+
+            <div class="stats-grid mt-4">
+            <div class="stat-item bg-gray-700">
+                <span class="stat-value">{{ mockProfile.correctPicks }}/{{ mockProfile.totalPicks }}</span>
+                <span class="stat-label">Pronósticos Acertados</span>
+            </div>
+            <div class="stat-item bg-gray-700">
+                <span class="stat-value text-yellow-500">{{ mockProfile.winningStreak }}</span>
+                <span class="stat-label">Racha Ganadora</span>
+            </div>
+            </div>
+
+            <h3 class="section-subtitle mt-6">Posiciones de mi Pool (Mock)</h3>
+            <ul class="pool-list">
+                @for (user of mockStandings; track user.id) {
+                    <li class="pool-list-item">
+                        <span class="pool-list-rank">{{ user.rank }}. {{ user.name }}</span>
+                        <span class="pool-list-score">{{ user.score }} pts</span>
+                    </li>
+                }
+            </ul>
+        </div>
+        </div>
+    }
+    </main>
+
+    <!-- Footer de Navegación Fijo -->
+    <footer class="footer-fixed">
+    <nav class="footer-nav">
+        @for (item of navItems; track item.label) {
+        <a href="#" class="footer-nav-item"
+            (click)="selectTab(item.tab)"
+            [class.footer-nav-active]="activeTab() === item.tab"
+            [class.footer-nav-inactive]="activeTab() !== item.tab">
+            <!-- Icono SVG -->
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                <path stroke-linecap="round" stroke-linejoin="round" [attr.d]="item.path" />
+            </svg>
+            {{ item.label }}
+        </a>
+        }
+    </nav>
+    </footer>
+</div>
