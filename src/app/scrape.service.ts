@@ -27,7 +27,7 @@ export interface Match {
 }
 
 @Injectable({ providedIn: 'root' })
-export class TsdbScrapeService {
+export class ScrapeService {
   private http = inject(HttpClient);
 
   /**
