@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, signal, inject, OnInit } from '@angular/core';
 import { HttpClientModule } from '@angular/common/http';
-import { Match, Team, TsdbScrapeService } from './thesportsdb.service';
+import { Match, SportDbNewService, Team } from './sports.servicenew.service';
 
 type MatchStatus = 'FINISHED' | 'SCHEDULED';
 
@@ -102,7 +102,7 @@ interface NavItem {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class App implements OnInit {
-  private api = inject(TsdbScrapeService);
+  private api = inject(SportDbNewService);
 
   // Estado UI
   activeTab = signal<'HOME' | 'PICKEM' | 'PROFILE'>('PICKEM');
@@ -137,32 +137,24 @@ export class App implements OnInit {
     { label: 'Perfil', tab: 'PROFILE', path: 'M17.982 7.525a1.5 1.5 0 10-.007 2.992 1.5 1.5 0 00.007-2.992zM12 17.25c-2.485 0-4.5-2.239-4.5-5s2.015-5 4.5-5 4.5 2.239 4.5 5-2.015 5-4.5 5z' },
   ];
 
-ngOnInit(): void {
-  const url = 'https://www.thesportsdb.com/season/4350-mexican-primera-league/2025-2026&all=1&view=';
+  ngOnInit(): void {
+    const url = 'https://www.thesportsdb.com/api/v1/json/3/eventsseason.php?id=4350&s=2025-2026';
 
-  this.api.getSeasonFromHtml(url).subscribe(({ teams, matches }) => {
-    this.teams.set(teams);
+    this.api.getSeason(url).subscribe(({ teams, matches }) => {
+      this.teams.set(teams);
+      this.matches.set(matches); // ya viene normalizado desde el servicio
 
-    // 🔧 Normaliza: deja week como "01", "02", ... (solo dígitos, 2 chars)
-    const normalizedMatches = matches.map(m => {
-      const raw = String(m.week ?? '').trim();
-      const onlyDigits = raw.replace(/\D/g, '');     // quita TODO lo que no sea dígito (r/R, espacios, etc.)
-      const wk = onlyDigits.padStart(2, '0');        // "1" -> "01"
-      return { ...m, week: wk };
+      // Semanas únicas (num)
+      const uniqueWeeks = [...new Set(matches.map(m => Number(m.week)))].sort((a, b) => a - b);
+
+      // Auto-selección de semana (puedes conservar tu pickAutoWeek si te gusta ese criterio):
+      const auto = this.pickAutoWeek(
+        matches.map(m => ({ week: m.week, date: m.date, status: m.status })), 
+        '2025-2026'
+      );
+      this.selectedWeek.set(parseInt(auto, 10));
     });
-
-    // ⬇️ IMPORTANTE: setear los NORMALIZADOS
-    this.matches.set(normalizedMatches);
-
-    // 🧮 Semanas únicas limpias (sin "r")
-    const uniqueWeeks = [...new Set(normalizedMatches.map(m => m.week))].sort();
-
-    // 🔹 Jornada inicial (la primera disponible)
-    const auto = this.pickAutoWeek(normalizedMatches, '2025-2026');
-    this.selectedWeek.set(parseInt(auto) + 1);
-  });
-}
-
+  }
 
 
   // Semanas únicas
