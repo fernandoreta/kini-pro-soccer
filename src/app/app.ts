@@ -129,6 +129,9 @@ export class App implements OnInit {
     correctPicks: 38,
     winningStreak: 5
   };
+  readonly TOTAL_WEEKS = 17;
+  weeks = computed(() => Array.from({ length: this.TOTAL_WEEKS }, (_, i) => i + 1));
+  filteredMatches = computed(() => this.matches());
 
   // Footer nav items (faltaban)
   navItems: NavItem[] = [
@@ -138,29 +141,16 @@ export class App implements OnInit {
   ];
 
   ngOnInit(): void {
-    const url = 'https://www.thesportsdb.com/api/v1/json/3/eventsseason.php?id=4350&s=2025-2026';
+    const leagueId = 4350;
+    const season = '2025-2026';
 
-    this.api.getSeason(url).subscribe(({ teams, matches }) => {
-      this.teams.set(teams);
-      this.matches.set(matches); // ya viene normalizado desde el servicio
-
-      // Semanas únicas (num)
-      const uniqueWeeks = [...new Set(matches.map(m => Number(m.week)))].sort((a, b) => a - b);
-
-      // Auto-selección de semana (puedes conservar tu pickAutoWeek si te gusta ese criterio):
-      const auto = this.pickAutoWeek(
-        matches.map(m => ({ week: m.week, date: m.date, status: m.status })), 
-        '2025-2026'
-      );
-      this.selectedWeek.set(parseInt(auto, 10));
-    });
+    this.api.getInitialRound({ leagueId, season, maxRounds: this.TOTAL_WEEKS })
+      .subscribe(({ round, matches }) => {
+        this.selectedWeek.set(round);
+        this.matches.set(matches);
+        // (Opcional) podrías inferir teams de los matches si quieres poblar logos globales
+      });
   }
-
-
-  // Semanas únicas
-  weeks = computed(() => {
-    return [...new Set(this.matches().map(m => Number(m.week)))].sort((a, b) => a - b);
-  });
 
   // Estado de la jornada seleccionada
   selectedWeekStatus = computed<MatchStatus>(() => {
@@ -169,15 +159,20 @@ export class App implements OnInit {
     return (ms.length && ms.every(m => m.status === 'FINISHED')) ? 'FINISHED' : 'SCHEDULED';
   });
 
-  // Partidos filtrados por semana
-  filteredMatches = computed(() => {
-    const ws = String(this.selectedWeek()).padStart(2, '0'); // "1" -> "01"
-    return this.matches().filter(m => String(m.week).padStart(2, '0') === ws);
-  });
+  selectWeek(week: number): void {
+    if (week === this.selectedWeek()) return;
+    this.selectedWeek.set(week);
+
+    const leagueId = 4350;
+    const season = '2025-2026';
+
+    this.api.getRoundCached({ leagueId, season, round: week })
+      .subscribe(matches => this.matches.set(matches));
+  }
+
 
   // Navegación
   selectTab(tab: 'HOME' | 'PICKEM' | 'PROFILE'): void { this.activeTab.set(tab); }
-  selectWeek(week: number): void { this.selectedWeek.set(week); }
 
   // Picks
   makePick(matchId: number, winnerId: number): void {
