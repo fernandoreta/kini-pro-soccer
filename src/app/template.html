@@ -2,8 +2,31 @@
     <!-- Encabezado Fijo -->
     <header class="header-fixed">
     <div class="header-top-bar">
+        <div>
         <div class="header-title">Liga MX Pick'Em</div>
         <div class="header-subtitle">Jornada {{ selectedWeek() }}</div>
+        </div>
+        <div class="header-user-area">
+        @if (authUser()) {
+            <span class="auth-welcome">Hola, {{ authDisplayName() }}</span>
+            <button 
+            type="button"
+            class="auth-button"
+            (click)="signOut()"
+            [disabled]="authLoading()"
+            >
+            Cerrar sesión
+            </button>
+        } @else {
+            <button 
+            type="button"
+            class="auth-button"
+            (click)="openAuthModal('login')"
+            >
+            Entrar / Registrar
+            </button>
+        }
+        </div>
     </div>
     </header>
 
@@ -240,4 +263,52 @@
         }
     </nav>
     </footer>
+    @if (authModalOpen()) {
+    <div class="auth-modal-overlay" (click)="closeAuthModal()">
+        <div class="auth-modal-card" (click)="$event.stopPropagation()">
+        <button type="button" class="auth-modal-close" (click)="closeAuthModal()">×</button>
+        <h2 class="auth-modal-title">
+            {{ authMode() === 'login' ? 'Inicia sesión' : 'Crea tu cuenta' }}
+        </h2>
+        <p class="auth-modal-toggle">
+            @if (authMode() === 'login') {
+            ¿No tienes cuenta?
+            <button type="button" (click)="switchAuthMode('register')">Regístrate</button>
+            } @else {
+            ¿Ya tienes cuenta?
+            <button type="button" (click)="switchAuthMode('login')">Usa tu usuario</button>
+            }
+        </p>
+        <form class="auth-modal-form" (ngSubmit)="submitAuth()">
+            <label>
+            Usuario
+            <input
+                name="username"
+                [(ngModel)]="authUsername"
+                autocomplete="username"
+                placeholder="Tu usuario"
+                required
+            >
+            </label>
+            <label>
+            Contraseña
+            <input
+                type="password"
+                name="password"
+                [(ngModel)]="authPassword"
+                autocomplete="current-password"
+                placeholder="••••••"
+                required
+            >
+            </label>
+            @if (authError()) {
+            <div class="auth-modal-error">{{ authError() }}</div>
+            }
+            <button type="submit" [disabled]="authLoading()">
+            {{ authLoading() ? 'Procesando...' : authMode() === 'login' ? 'Entrar' : 'Registrarme' }}
+            </button>
+        </form>
+        </div>
+    </div>
+    }
 </div>

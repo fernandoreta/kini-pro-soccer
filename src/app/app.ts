@@ -1,5 +1,7 @@
-import { ChangeDetectionStrategy, Component, computed, signal, inject, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, signal, inject, OnDestroy, OnInit } from '@angular/core';
 import { HttpClientModule } from '@angular/common/http';
+import { FormsModule } from '@angular/forms';
+import { SupabaseClient, User, createClient } from '@supabase/supabase-js';
 import { Match, SportDbNewService, Team } from './sports.servicenew.service';
 
 type MatchStatus = 'FINISHED' | 'SCHEDULED';
@@ -15,10 +17,14 @@ interface NavItem {
   tab: 'HOME' | 'PICKEM' | 'PROFILE';
 }
 
+const SUPABASE_URL = 'https://jhbzqsopzfgwcfevzhpe.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpoYnpxc29wemZnd2NmZXZ6aHBlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE5MzE3NjYsImV4cCI6MjA3NzUwNzc2Nn0.cNznQyVXM4sC0RTAXj9RZIDAh7xR6HAERgd1HZk3vMk';
+const AUTH_EMAIL_DOMAIN = 'auth.kini-pro.local';
+
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [],
+  imports: [FormsModule],
   templateUrl: './template.html',
   styles: [
     `.app-container {
@@ -45,6 +51,11 @@ interface NavItem {
     }`,
     `.header-title { font-size: 1.25rem; font-weight: bold; }`,
     `.header-subtitle { font-size: 0.875rem; font-weight: 300; color: #9ca3af; }`,
+    `.header-user-area { display: flex; align-items: center; gap: 0.75rem; }`,
+    `.auth-welcome { font-size: 0.875rem; color: #9ca3af; }`,
+    `.auth-button { padding: 0.3rem 0.9rem; border-radius: 9999px; background-color: #2563eb; color: white; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; transition: background-color 200ms ease-in-out; }`,
+    `.auth-button:hover:not(:disabled) { background-color: #1d4ed8; }`,
+    `.auth-button:disabled { opacity: 0.6; cursor: not-allowed; }`,
     `.main-content { flex-grow: 1; padding: 1rem; padding-bottom: 6rem; overflow-y: auto; }`,
     `.content-section { display: flex; flex-direction: column; gap: 1.5rem; }`,
     `.section-title { font-size: 1.25rem; font-weight: 600; color: #e5e7eb; text-transform: uppercase; margin-bottom: 0.5rem; }`,
@@ -98,11 +109,60 @@ interface NavItem {
     `.footer-nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0.5rem; font-size: 0.75rem; font-weight: 500; transition-property: color; transition-duration: 200ms; text-decoration: none; flex: 1; }`,
     `.footer-nav-active { color: #10b981; }`,
     `.footer-nav-inactive { color: #9ca3af; }`,
+    `.auth-modal-overlay { position: fixed; inset: 0; background-color: rgba(15, 23, 42, 0.85); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 1.5rem; }`,
+    `.auth-modal-card { position: relative; width: min(100%, 24rem); background-color: #111827; border: 1px solid #1f2937; border-radius: 0.75rem; padding: 1.5rem; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4); display: flex; flex-direction: column; gap: 1rem; }`,
+    `.auth-modal-close { position: absolute; top: 0.75rem; right: 0.75rem; background: transparent; border: none; color: #9ca3af; font-size: 1.25rem; cursor: pointer; }`,
+    `.auth-modal-close:hover { color: #f3f4f6; }`,
+    `.auth-modal-title { font-size: 1.25rem; font-weight: 700; color: #f9fafb; }`,
+    `.auth-modal-toggle { font-size: 0.875rem; color: #9ca3af; }`,
+    `.auth-modal-toggle button { background: none; border: none; color: #60a5fa; font-weight: 600; cursor: pointer; padding: 0; margin-left: 0.25rem; }`,
+    `.auth-modal-toggle button:hover { color: #93c5fd; }`,
+    `.auth-modal-form { display: flex; flex-direction: column; gap: 0.75rem; }`,
+    `.auth-modal-form label { font-size: 0.875rem; color: #cbd5f5; display: flex; flex-direction: column; gap: 0.35rem; }`,
+    `.auth-modal-form input { padding: 0.65rem 0.75rem; border-radius: 0.5rem; border: 1px solid #374151; background-color: #1f2937; color: #f9fafb; font-size: 0.95rem; }`,
+    `.auth-modal-form input:focus { outline: 2px solid #2563eb; outline-offset: 2px; }`,
+    `.auth-modal-form button[type="submit"] { margin-top: 0.5rem; background-color: #10b981; color: #0b1120; border: none; border-radius: 0.5rem; padding: 0.65rem; font-weight: 700; cursor: pointer; transition: background-color 200ms ease-in-out; }`,
+    `.auth-modal-form button[type="submit"]:hover:not(:disabled) { background-color: #059669; }`,
+    `.auth-modal-form button[type="submit"]:disabled { opacity: 0.6; cursor: not-allowed; }`,
+    `.auth-modal-error { background-color: #7f1d1d; color: #fecaca; border-radius: 0.5rem; padding: 0.5rem 0.75rem; font-size: 0.875rem; }`,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class App implements OnInit {
+export class App implements OnInit, OnDestroy {
   private api = inject(SportDbNewService);
+  private supabase?: SupabaseClient;
+  private authStateSubscription?: { unsubscribe: () => void };
+  private readonly supabaseConfigured = !!SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes('COLOCA_TU_SUPABASE_ANON_KEY_AQUI');
+
+  authUser = signal<User | null>(null);
+  authModalOpen = signal(false);
+  authMode = signal<'login' | 'register'>('login');
+  authLoading = signal(false);
+  authError = signal<string | null>(null);
+  authUsername = '';
+  authPassword = '';
+  authDisplayName = computed(() => {
+    const user = this.authUser();
+    if (!user) return '';
+    const metadataName = typeof user.user_metadata?.['username'] === 'string' ? user.user_metadata['username'] : '';
+    if (metadataName) return metadataName;
+    if (user.email) return user.email.split('@')[0];
+    return 'Usuario';
+  });
+
+  constructor() {
+    if (this.supabaseConfigured) {
+      this.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          persistSession: true,
+          storageKey: 'kini-pro-auth',
+        },
+      });
+      void this.initializeAuth();
+    } else {
+      console.warn('Supabase no está configurado. Configura la clave anónima para habilitar autenticación.');
+    }
+  }
 
   // Estado UI
   activeTab = signal<'HOME' | 'PICKEM' | 'PROFILE'>('PICKEM');
@@ -140,6 +200,137 @@ export class App implements OnInit {
     { label: 'Perfil', tab: 'PROFILE', path: 'M17.982 7.525a1.5 1.5 0 10-.007 2.992 1.5 1.5 0 00.007-2.992zM12 17.25c-2.485 0-4.5-2.239-4.5-5s2.015-5 4.5-5 4.5 2.239 4.5 5-2.015 5-4.5 5z' },
   ];
 
+  openAuthModal(mode: 'login' | 'register'): void {
+    this.authMode.set(mode);
+    this.authError.set(null);
+    this.authLoading.set(false);
+    this.resetAuthForm();
+    this.authModalOpen.set(true);
+  }
+
+  closeAuthModal(): void {
+    this.authModalOpen.set(false);
+    this.authError.set(null);
+    this.authLoading.set(false);
+    this.resetAuthForm();
+  }
+
+  switchAuthMode(mode: 'login' | 'register'): void {
+    this.authMode.set(mode);
+    this.authError.set(null);
+    this.authLoading.set(false);
+    this.resetAuthForm();
+  }
+
+  async submitAuth(): Promise<void> {
+    if (!this.supabaseConfigured || !this.supabase) {
+      this.authError.set('Configura las credenciales de Supabase antes de continuar.');
+      return;
+    }
+
+    const username = this.authUsername.trim();
+    const password = this.authPassword;
+
+    if (!username || !password) {
+      this.authError.set('Ingresa usuario y contraseña.');
+      return;
+    }
+
+    if (password.length < 6) {
+      this.authError.set('La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+
+    this.authLoading.set(true);
+    this.authError.set(null);
+
+    const email = this.mapUsernameToEmail(username);
+
+    try {
+      if (this.authMode() === 'login') {
+        const { error } = await this.supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      } else {
+        const { data, error } = await this.supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { username },
+          },
+        });
+        if (error) throw error;
+        if (!data.user) {
+          throw new Error('El registro no devolvió un usuario activo.');
+        }
+      }
+      this.resetAuthForm();
+      this.authModalOpen.set(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo completar la autenticación.';
+      this.authError.set(message);
+    } finally {
+      this.authLoading.set(false);
+    }
+  }
+
+  async signOut(): Promise<void> {
+    if (!this.supabaseConfigured || !this.supabase) {
+      this.authUser.set(null);
+      return;
+    }
+
+    this.authLoading.set(true);
+    this.authError.set(null);
+    setTimeout(() => {
+      location.reload();
+    }, 500);
+    try {
+      const { error } = await this.supabase.auth.signOut();
+      if (error) {
+        throw error;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No se pudo cerrar sesión.';
+      this.authError.set(message);
+    } finally {
+      this.authLoading.set(false);
+    }
+  }
+
+  private async initializeAuth(): Promise<void> {
+    if (!this.supabase) return;
+
+    try {
+      const { data, error } = await this.supabase.auth.getSession();
+      if (!error && data.session?.user) {
+        this.authUser.set(data.session.user);
+      }
+    } catch (error) {
+      console.error('No se pudo recuperar la sesión de Supabase', error);
+    }
+
+    const { data } = this.supabase.auth.onAuthStateChange((_event, session) => {
+      this.authUser.set(session?.user ?? null);
+    });
+
+    // if (error) {
+    //   console.error('No se pudo suscribir a los cambios de autenticación', error);
+    //   return;
+    // }
+
+    this.authStateSubscription = data.subscription;
+  }
+
+  private resetAuthForm(): void {
+    this.authUsername = '';
+    this.authPassword = '';
+  }
+
+  private mapUsernameToEmail(username: string): string {
+    const sanitized = username.trim().toLowerCase().replace(/\s+/g, '.');
+    return `${sanitized}@${AUTH_EMAIL_DOMAIN}`;
+  }
+
   ngOnInit(): void {
     const leagueId = 4350;
     const season = '2025-2026';
@@ -150,6 +341,10 @@ export class App implements OnInit {
         this.matches.set(matches);
         // (Opcional) podrías inferir teams de los matches si quieres poblar logos globales
       });
+  }
+
+  ngOnDestroy(): void {
+    this.authStateSubscription?.unsubscribe();
   }
 
   // Estado de la jornada seleccionada
