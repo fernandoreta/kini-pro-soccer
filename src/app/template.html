@@ -59,11 +59,81 @@
                 <li><span class="text-blue-400 font-bold">MONTERREY:</span> Su entrenador es baja por lesión.</li>
             </ul>
         </div>
+        <div class="pool-card">
+            <div class="pool-card-header">
+            <span class="pool-card-title">Mis Pools</span>
+            <div class="pool-card-actions">
+                <button type="button" class="pool-create-button" (click)="openPoolModal()">
+                Crear pool
+                </button>
+            </div>
+            </div>
+            @if (!authUser()) {
+            <p class="pool-callout">
+                Inicia sesión para crear un pool y compartir el código con tus amigos.
+            </p>
+            <button type="button" class="auth-button" (click)="openAuthModal('login')">
+                Iniciar sesión
+            </button>
+            } @else {
+            <section class="pools-section">
+  <header class="pools-header">
+    <h3>Mis pools</h3>
+    @if (poolsLoading()) {
+      <span class="badge loading">Cargando…</span>
+    } @else if (poolsError()) {
+      <span class="badge error">{{ poolsError() }}</span>
+    } @else {
+      <span class="badge count">{{ userPools().length }} activo(s)</span>
+    }
+  </header>
+
+  @if (!poolsLoading() && !poolsError() && userPools().length === 0) {
+    <div class="empty-state">
+      <div class="empty-icon">🏟️</div>
+      <h4>Aún no participas en ningún pool</h4>
+      <p>Crea uno nuevo y comparte el código, o únete con un código que te hayan enviado.</p>
+      <div class="empty-actions">
+        <button type="button" class="btn primary" (click)="openPoolModal()">Crear pool</button>
+        <button type="button" class="btn" (click)="openJoinByCode()">Unirme por código</button>
+      </div>
+    </div>
+  } @else if (!poolsLoading() && !poolsError()) {
+    <ul class="pool-grid">
+      @for (pool of userPools(); track trackByPool) {
+        <li class="pool-card">
+          <div class="pool-card-header">
+            <h4 class="pool-title">
+              {{ pool.name }}
+              @if (pool.isOwner) { <span class="chip owner">Creador</span> }
+            </h4>
+          </div>
+
+          <div class="pool-meta">
+            <span class="meta-label">Código</span>
+            <code class="pool-code">{{ pool.code }}</code>
+            <button type="button" class="btn ghost sm" (click)="copy(pool.code)">Copiar</button>
+          </div>
+
+          <div class="pool-actions">
+            <button type="button" class="btn" (click)="openPool(pool.id)">Abrir</button>
+            @if (pool.isOwner) {
+              <button type="button" class="btn ghost" (click)="managePool(pool.id)">Administrar</button>
+            }
+          </div>
+        </li>
+      }
+    </ul>
+  }
+</section>
+
+            }
+        </div>
         </div>
     }
 
     <!-- Vista PRONÓSTICOS (PICKEM) -->
-    @if (activeTab() === 'PICKEM') {
+    @if (activeTab() === 'PICKEM' && authUser()) {
         <div class="content-section">
         <!-- Selector de Jornada -->
         <div class="week-selector-scroll">
@@ -115,7 +185,8 @@
                 <div 
                     (click)="match.status === 'SCHEDULED' && makePick(match.id, match.homeTeam.id)"
                     [class.pick-ring-active]="getPick(match.id) === match.homeTeam.id"
-                    [class.cursor-not-allowed]="match.status === 'FINISHED'"
+                    [class.cursor-not-allowed]="match.status === 'FINISHED' || (match.date | isDisabled1hBefore: match.time)"
+                    [style.pointer-events]="(match.status === 'FINISHED' || (match.date | isDisabled1hBefore: match.time)) ? 'none' : 'auto'"
                     class="team-pick-area"
                 >
                     <img 
@@ -148,7 +219,8 @@
                 <div 
                     (click)="match.status === 'SCHEDULED' && makePick(match.id, match.awayTeam.id)"
                     [class.pick-ring-active]="getPick(match.id) === match.awayTeam.id"
-                    [class.cursor-not-allowed]="match.status === 'FINISHED'"
+                    [class.cursor-not-allowed]="match.status === 'FINISHED' || (match.date | isDisabled1hBefore: match.time)"
+                    [style.pointer-events]="(match.status === 'FINISHED' || (match.date | isDisabled1hBefore: match.time)) ? 'none' : 'auto'"
                     class="team-pick-area"
                 >
                     <img 
@@ -206,7 +278,7 @@
     }
 
     <!-- Vista PERFIL -->
-    @if (activeTab() === 'PROFILE') {
+    @if (activeTab() === 'PROFILE' && authUser()) {
         <div class="content-section">
         <div class="profile-card">
             <h2 class="section-title text-blue-400">Mi Perfil Pick'Em</h2>
@@ -250,65 +322,64 @@
     <footer class="footer-fixed">
     <nav class="footer-nav">
         @for (item of navItems; track item.label) {
-        <a href="#" class="footer-nav-item"
-            (click)="selectTab(item.tab)"
-            [class.footer-nav-active]="activeTab() === item.tab"
-            [class.footer-nav-inactive]="activeTab() !== item.tab">
-            <!-- Icono SVG -->
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
-                <path stroke-linecap="round" stroke-linejoin="round" [attr.d]="item.path" />
-            </svg>
-            {{ item.label }}
-        </a>
+        @if (authUser() || (item.tab !== 'PICKEM' && item.tab !== 'PROFILE')) {
+            <a href="#" class="footer-nav-item"
+                (click)="selectTab(item.tab)"
+                [class.footer-nav-active]="activeTab() === item.tab"
+                [class.footer-nav-inactive]="activeTab() !== item.tab">
+                <!-- Icono SVG -->
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" [attr.d]="item.path" />
+                </svg>
+                {{ item.label }}
+            </a>
+        }
         }
     </nav>
     </footer>
-    @if (authModalOpen()) {
-    <div class="auth-modal-overlay" (click)="closeAuthModal()">
-        <div class="auth-modal-card" (click)="$event.stopPropagation()">
-        <button type="button" class="auth-modal-close" (click)="closeAuthModal()">×</button>
-        <h2 class="auth-modal-title">
-            {{ authMode() === 'login' ? 'Inicia sesión' : 'Crea tu cuenta' }}
-        </h2>
-        <p class="auth-modal-toggle">
-            @if (authMode() === 'login') {
-            ¿No tienes cuenta?
-            <button type="button" (click)="switchAuthMode('register')">Regístrate</button>
-            } @else {
-            ¿Ya tienes cuenta?
-            <button type="button" (click)="switchAuthMode('login')">Usa tu usuario</button>
-            }
-        </p>
-        <form class="auth-modal-form" (ngSubmit)="submitAuth()">
-            <label>
-            Usuario
-            <input
-                name="username"
-                [(ngModel)]="authUsername"
-                autocomplete="username"
-                placeholder="Tu usuario"
-                required
-            >
-            </label>
-            <label>
-            Contraseña
-            <input
-                type="password"
-                name="password"
-                [(ngModel)]="authPassword"
-                autocomplete="current-password"
-                placeholder="••••••"
-                required
-            >
-            </label>
-            @if (authError()) {
-            <div class="auth-modal-error">{{ authError() }}</div>
-            }
-            <button type="submit" [disabled]="authLoading()">
-            {{ authLoading() ? 'Procesando...' : authMode() === 'login' ? 'Entrar' : 'Registrarme' }}
-            </button>
-        </form>
-        </div>
+   <section class="pool-lists">
+  <h3>Mis pools</h3>
+  @if (poolsLoading()) {
+    <div>Cargando...</div>
+  } @else if (poolsError()) {
+    <div class="pool-error">{{ poolsError() }}</div>
+  } @else {
+    <div class="pool-group">
+      <h4>Propietario</h4>
+      @if (myOwnedPools()?.length) {
+        <ul class="pool-list">
+          @for (p of myOwnedPools(); track p.id) {
+            <li class="pool-item">
+              <div class="pool-title">{{ p.name }}</div>
+              <div class="pool-meta">
+                Código: <code>{{ p.code }}</code>
+                <span class="chip chip-owner">owner</span>
+              </div>
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="muted">Aún no has creado pools.</p>
+      }
+
+      <h4>Miembro</h4>
+      @if (myMemberPools()?.length) {
+        <ul class="pool-list">
+          @for (p of myMemberPools(); track p.id) {
+            <li class="pool-item">
+              <div class="pool-title">{{ p.name }}</div>
+              <div class="pool-meta">
+                Código: <code>{{ p.code }}</code>
+                <span class="chip">member</span>
+              </div>
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="muted">Aún no te unes a ningún pool.</p>
+      }
     </div>
-    }
+  }
+</section>
+
 </div>

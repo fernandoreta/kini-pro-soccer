@@ -3,6 +3,7 @@ import { HttpClientModule } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { SupabaseClient, User, createClient } from '@supabase/supabase-js';
 import { Match, SportDbNewService, Team } from './sports.servicenew.service';
+import { IsDisabled1hBeforePipe } from './time.pipe';
 
 type MatchStatus = 'FINISHED' | 'SCHEDULED';
 
@@ -17,14 +18,20 @@ interface NavItem {
   tab: 'HOME' | 'PICKEM' | 'PROFILE';
 }
 
+interface PoolSummary {
+  id: number;
+  name: string;
+  code: string;
+}
+
 const SUPABASE_URL = 'https://jhbzqsopzfgwcfevzhpe.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpoYnpxc29wemZnd2NmZXZ6aHBlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE5MzE3NjYsImV4cCI6MjA3NzUwNzc2Nn0.cNznQyVXM4sC0RTAXj9RZIDAh7xR6HAERgd1HZk3vMk';
 const AUTH_EMAIL_DOMAIN = 'auth.kini-pro.local';
-
+type PoolListItem = { id: string; name: string; code: string; isOwner: boolean };
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, IsDisabled1hBeforePipe],
   templateUrl: './template.html',
   styles: [
     `.app-container {
@@ -125,6 +132,40 @@ const AUTH_EMAIL_DOMAIN = 'auth.kini-pro.local';
     `.auth-modal-form button[type="submit"]:hover:not(:disabled) { background-color: #059669; }`,
     `.auth-modal-form button[type="submit"]:disabled { opacity: 0.6; cursor: not-allowed; }`,
     `.auth-modal-error { background-color: #7f1d1d; color: #fecaca; border-radius: 0.5rem; padding: 0.5rem 0.75rem; font-size: 0.875rem; }`,
+    `.pool-card { margin-top: 1.5rem; background-color: #151a21; border: 1px solid #1f2937; border-radius: 0.75rem; padding: 1rem; display: flex; flex-direction: column; gap: 1rem; }`,
+    `.pool-card-header { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }`,
+    `.pool-card-title { font-size: 1.05rem; font-weight: 700; color: #f3f4f6; }`,
+    `.pool-card-actions { display: flex; gap: 0.5rem; }`,
+    `.pool-create-button { padding: 0.5rem 1.1rem; border-radius: 9999px; background-color: #10b981; color: #052e16; font-weight: 700; border: none; cursor: pointer; transition: background-color 200ms ease-in-out; }`,
+    `.pool-create-button:hover { background-color: #059669; }`,
+    `.pool-create-button:disabled { opacity: 0.6; cursor: not-allowed; }`,
+    `.pool-callout { font-size: 0.95rem; color: #d1d5db; }`,
+    `.pool-list { display: flex; flex-direction: column; gap: 0.75rem; }`,
+    `.pool-list-empty { font-size: 0.9rem; color: #9ca3af; }`,
+    `.pool-item { display: flex; justify-content: space-between; align-items: center; border: 1px solid #1f2937; border-radius: 0.6rem; padding: 0.65rem 0.75rem; background-color: #111827; }`,
+    `.pool-item-info { display: flex; flex-direction: column; gap: 0.15rem; }`,
+    `.pool-item-title { font-size: 0.95rem; font-weight: 600; color: #f9fafb; }`,
+    `.pool-item-code { font-family: 'Space Mono', monospace; font-size: 0.9rem; letter-spacing: 0.2rem; color: #facc15; text-transform: uppercase; }`,
+    `.pool-item-owned { font-size: 0.7rem; font-weight: 600; color: #7dd3fc; text-transform: uppercase; }`,
+    `.pool-error { margin-top: 0.2rem; padding: 0.5rem 0.75rem; border-radius: 0.5rem; background-color: #7f1d1d; color: #fecaca; font-size: 0.85rem; }`,
+    `.pool-modal-overlay { position: fixed; inset: 0; background-color: rgba(8, 15, 29, 0.85); display: flex; align-items: center; justify-content: center; z-index: 60; padding: 1.5rem; }`,
+    `.pool-modal-card { position: relative; width: min(100%, 24rem); background-color: #0f172a; border: 1px solid #1f2937; border-radius: 0.85rem; padding: 1.5rem; box-shadow: 0 18px 36px rgba(0, 0, 0, 0.45); display: flex; flex-direction: column; gap: 1rem; }`,
+    `.pool-modal-title { font-size: 1.2rem; font-weight: 700; color: #f9fafb; }`,
+    `.pool-modal-form { display: flex; flex-direction: column; gap: 0.75rem; }`,
+    `.pool-modal-form label { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.9rem; color: #cbd5f5; }`,
+    `.pool-modal-form input { padding: 0.6rem 0.75rem; border-radius: 0.55rem; border: 1px solid #374151; background-color: #111827; color: #f9fafb; }`,
+    `.pool-modal-form input:focus { outline: 2px solid #10b981; outline-offset: 2px; }`,
+    `.pool-modal-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }`,
+    `.pool-modal-primary { padding: 0.55rem 1.2rem; border-radius: 9999px; background-color: #10b981; color: #052e16; font-weight: 700; border: none; cursor: pointer; transition: background-color 200ms ease-in-out; }`,
+    `.pool-modal-primary:hover:not(:disabled) { background-color: #059669; }`,
+    `.pool-modal-primary:disabled { opacity: 0.6; cursor: not-allowed; }`,
+    `.pool-modal-secondary { padding: 0.55rem 1.2rem; border-radius: 9999px; border: 1px solid #1f2937; background-color: transparent; color: #cbd5f5; font-weight: 600; cursor: pointer; transition: color 200ms ease-in-out; }`,
+    `.pool-modal-secondary:hover { color: #f9fafb; }`,
+    `.pool-modal-close { position: absolute; top: 0.75rem; right: 0.75rem; background: none; border: none; color: #9ca3af; font-size: 1.3rem; cursor: pointer; }`,
+    `.pool-modal-close:hover { color: #f9fafb; }`,
+    `.pool-modal-success { display: flex; flex-direction: column; gap: 0.75rem; background-color: #052e16; border: 1px solid #14532d; border-radius: 0.65rem; padding: 1rem; color: #bbf7d0; }`,
+    `.pool-modal-success strong { font-size: 1rem; }`,
+    `.pool-modal-code { font-family: 'Space Mono', monospace; font-size: 1.5rem; letter-spacing: 0.3rem; color: #facc15; text-align: center; }`,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -149,6 +190,15 @@ export class App implements OnInit, OnDestroy {
     if (user.email) return user.email.split('@')[0];
     return 'Usuario';
   });
+  poolModalOpen = signal(false);
+  poolCreating = signal(false);
+  poolListLoading = signal(false);
+  poolCreationError = signal<string | null>(null);
+  poolListError = signal<string | null>(null);
+  userPools = signal<PoolListItem[]>([]);
+  poolNameInput = '';
+  createdPoolCode = signal<string | null>(null);
+  createdPoolName = signal<string | null>(null);
 
   constructor() {
     if (this.supabaseConfigured) {
@@ -165,7 +215,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   // Estado UI
-  activeTab = signal<'HOME' | 'PICKEM' | 'PROFILE'>('PICKEM');
+  activeTab = signal<'HOME' | 'PICKEM' | 'PROFILE'>('HOME');
   selectedWeek = signal<number>(1);
 
   // Picks
@@ -222,6 +272,29 @@ export class App implements OnInit, OnDestroy {
     this.resetAuthForm();
   }
 
+  openPoolModal(): void {
+    if (!this.authUser()) {
+      this.openAuthModal('login');
+      return;
+    }
+
+    this.poolModalOpen.set(true);
+    this.poolCreating.set(false);
+    this.poolCreationError.set(null);
+    this.createdPoolCode.set(null);
+    this.createdPoolName.set(null);
+    this.poolNameInput = '';
+  }
+
+  closePoolModal(): void {
+    this.poolModalOpen.set(false);
+    this.poolCreating.set(false);
+    this.poolCreationError.set(null);
+    this.createdPoolCode.set(null);
+    this.createdPoolName.set(null);
+    this.poolNameInput = '';
+  }
+
   async submitAuth(): Promise<void> {
     if (!this.supabaseConfigured || !this.supabase) {
       this.authError.set('Configura las credenciales de Supabase antes de continuar.');
@@ -276,24 +349,35 @@ export class App implements OnInit, OnDestroy {
   async signOut(): Promise<void> {
     if (!this.supabaseConfigured || !this.supabase) {
       this.authUser.set(null);
+      this.activeTab.set('HOME');
+      this.clearPoolCreationState();
+      this.userPools.set([]);
+      this.poolListError.set(null);
+      this.poolListLoading.set(false);
+      this.enforceAuthTabRestriction();
       return;
     }
 
     this.authLoading.set(true);
     this.authError.set(null);
-    setTimeout(() => {
-      location.reload();
-    }, 500);
+
     try {
       const { error } = await this.supabase.auth.signOut();
       if (error) {
         throw error;
       }
+      this.authUser.set(null);
+      this.activeTab.set('HOME');
+      this.clearPoolCreationState();
+      this.userPools.set([]);
+      this.poolListError.set(null);
+      this.poolListLoading.set(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'No se pudo cerrar sesión.';
       this.authError.set(message);
     } finally {
       this.authLoading.set(false);
+      this.enforceAuthTabRestriction();
     }
   }
 
@@ -302,15 +386,41 @@ export class App implements OnInit, OnDestroy {
 
     try {
       const { data, error } = await this.supabase.auth.getSession();
-      if (!error && data.session?.user) {
-        this.authUser.set(data.session.user);
+      if (error) {
+        console.error('No se pudo recuperar la sesión de Supabase', error);
       }
+      const sessionUser = data.session?.user ?? null;
+      this.authUser.set(sessionUser);
+      if (!sessionUser) {
+        this.clearPoolCreationState();
+        this.userPools.set([]);
+        this.poolListError.set(null);
+      } else {
+        this.poolCreationError.set(null);
+        await this.loadUserPools();
+      }
+      this.enforceAuthTabRestriction();
     } catch (error) {
       console.error('No se pudo recuperar la sesión de Supabase', error);
+      this.authUser.set(null);
+      this.clearPoolCreationState();
+      this.userPools.set([]);
+      this.poolListError.set(null);
+      this.enforceAuthTabRestriction();
     }
 
-    const { data } = this.supabase.auth.onAuthStateChange((_event, session) => {
-      this.authUser.set(session?.user ?? null);
+    const { data } = this.supabase.auth.onAuthStateChange(async (_event, session) => {
+      const sessionUser = session?.user ?? null;
+      this.authUser.set(sessionUser);
+      if (!sessionUser) {
+        this.clearPoolCreationState();
+        this.userPools.set([]);
+        this.poolListError.set(null);
+      } else {
+        this.poolCreationError.set(null);
+        await this.loadUserPools();
+      }
+      this.enforceAuthTabRestriction();
     });
 
     // if (error) {
@@ -334,13 +444,14 @@ export class App implements OnInit, OnDestroy {
   ngOnInit(): void {
     const leagueId = 4350;
     const season = '2025-2026';
-
+    
     this.api.getInitialRound({ leagueId, season, maxRounds: this.TOTAL_WEEKS })
       .subscribe(({ round, matches }) => {
         this.selectedWeek.set(round);
         this.matches.set(matches);
         // (Opcional) podrías inferir teams de los matches si quieres poblar logos globales
       });
+    this.loadUserPools();
   }
 
   ngOnDestroy(): void {
@@ -367,7 +478,233 @@ export class App implements OnInit, OnDestroy {
 
 
   // Navegación
-  selectTab(tab: 'HOME' | 'PICKEM' | 'PROFILE'): void { this.activeTab.set(tab); }
+  selectTab(tab: 'HOME' | 'PICKEM' | 'PROFILE'): void {
+    if (this.isAuthTab(tab) && !this.authUser()) {
+      this.openAuthModal('login');
+      return;
+    }
+    this.activeTab.set(tab);
+  }
+
+ async createPool(): Promise<void> {
+  const user = this.authUser();
+  if (!user) { this.openAuthModal('login'); return; }
+  if (!this.supabase) { this.poolCreationError.set('Supabase no está disponible en este momento.'); return; }
+
+  const name = this.poolNameInput.trim();
+  this.poolCreationError.set(null);
+  if (name.length < 3) {
+    this.poolCreationError.set('El nombre del pool debe tener al menos 3 caracteres.');
+    return;
+  }
+
+  this.poolCreating.set(true);
+
+  try {
+    const supabase = this.supabase;
+    const code = this.generatePoolCode();
+
+    // 1) Inserta el pool (puede que RLS bloquee el select de retorno)
+    const { data: inserted, error: insertErr } = await supabase
+      .from('pools')
+      .insert({ name, code, created_by: user.id })
+      .select('id, name, code')
+      .maybeSingle(); // <- evita error si no hay representación
+
+    if (insertErr) throw insertErr;
+
+    let pool = inserted;
+
+    // 2) Si no regresó representación por RLS, recupéralo explícitamente
+    if (!pool) {
+      const { data: fetched, error: fetchErr } = await supabase
+        .from('pools')
+        .select('id, name, code')
+        .eq('code', code)
+        .eq('created_by', user.id)   // asegura que te deje leerlo con la policy de creador
+        .maybeSingle();
+
+      if (fetchErr) throw fetchErr;
+      pool = fetched ?? null;
+    }
+
+    if (!pool) {
+      // En este punto, el insert ocurrió, pero no podemos leer la fila por RLS
+      // Lanza un error claro para ajustar las policies
+      throw new Error('Insert realizado, pero RLS impide leer el pool. Revisa la policy de SELECT.');
+    }
+
+    // 3) Te agregas como owner del pool (para que aparezca en tus listas)
+    const { error: memberErr } = await supabase
+      .from('pool_members')
+      .insert({ pool_id: pool.id, user_id: user.id, role: 'owner' });
+
+    if (memberErr && memberErr.code !== '23505') throw memberErr;
+
+    // 4) Feedback UI
+    this.createdPoolName.set(pool.name);
+    this.createdPoolCode.set(pool.code);
+    this.poolNameInput = '';
+
+    // 5) Recargar tus pools (lee desde pool_members)
+    await this.loadUserPools();
+
+  } catch (error) {
+    console.error('No se pudo crear el pool', error);
+    const message = error instanceof Error ? error.message : 'Ocurrió un error al crear el pool.';
+    this.poolCreationError.set(message);
+  } finally {
+    this.poolCreating.set(false);
+  }
+}
+
+  // 🔹 Copiar código
+  copy(code: string) {
+    navigator.clipboard?.writeText(code);
+    alert('Código copiado: ' + code);
+  }
+
+  // 🔹 Abrir un pool
+  openPool(id: string) {
+    console.log('Abrir pool:', id);
+    // Aquí podrías hacer navigate a una vista tipo `/pool/:id`
+  }
+
+  // 🔹 Administrar (solo si owner)
+  managePool(id: string) {
+    console.log('Administrar pool:', id);
+    // Navegar o abrir modal
+  }
+
+  // 🔹 Unirse por código
+  openJoinByCode() {
+    console.log('Abrir modal para unirse a un pool');
+  }
+
+
+// Signals/estado
+myOwnedPools = signal<PoolListItem[]>([]);
+myMemberPools = signal<PoolListItem[]>([]);
+poolsLoading = signal(false);
+poolsError = signal<string | null>(null);
+
+// Útil para *trackBy*
+trackByPool = (_: number, p: PoolListItem) => p.id;
+
+async loadUserPools(): Promise<void> {
+  const user = this.authUser?.();
+  if (!user || !this.supabase) return;
+
+  this.poolsLoading.set(true);
+  this.poolsError.set(null);
+
+  try {
+    // Nota: el alias pool:pools funciona si tienes FK pool_members.pool_id -> pools.id
+    const { data, error } = await this.supabase
+      .from('pool_members')
+      .select(`
+        role,
+        pool:pools ( id, name, code )
+      `)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+
+    const owned: PoolListItem[] = [];
+    const member: PoolListItem[] = [];
+
+    for (const row of (data ?? [])) {
+      // si viene array, toma el primer elemento; si viene objeto, úsalo tal cual
+      const poolRow = Array.isArray(row.pool) ? row.pool[0] : row.pool;
+      if (!poolRow) continue;
+
+      const item: PoolListItem = {
+        id: poolRow.id,
+        name: poolRow.name,
+        code: poolRow.code,
+        isOwner: row.role === 'owner'
+      };
+
+      (row.role === 'owner' ? owned : member).push(item);
+    }
+
+
+    this.myOwnedPools.set(owned);
+    this.myMemberPools.set(member);
+  } catch (err) {
+    console.error(err);
+    const msg = err instanceof Error ? err.message : 'No se pudieron cargar tus pools.';
+    this.poolsError.set(msg);
+  } finally {
+    this.poolsLoading.set(false);
+  }
+}
+
+
+
+  private generatePoolCode(): string {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    while (code.length < 5) {
+      const index = Math.floor(Math.random() * alphabet.length);
+      code += alphabet[index];
+    }
+    return code;
+  }
+
+  private clearPoolCreationState(): void {
+    this.poolNameInput = '';
+    this.poolModalOpen.set(false);
+    this.poolCreating.set(false);
+    this.poolCreationError.set(null);
+    this.createdPoolCode.set(null);
+    this.createdPoolName.set(null);
+  }
+
+  private isAuthTab(tab: 'HOME' | 'PICKEM' | 'PROFILE'): boolean {
+    return tab === 'PICKEM' || tab === 'PROFILE';
+  }
+
+  private enforceAuthTabRestriction(): void {
+    if (!this.authUser() && this.isAuthTab(this.activeTab())) {
+      this.activeTab.set('HOME');
+    }
+  }
+
+  async joinWithCode(inputCode: string): Promise<void> {
+  const user = this.authUser();
+  if (!user || !this.supabase) return;
+  this.poolsLoading.set(true);
+  this.poolsError.set(null);
+
+  try {
+    // 1) buscar el pool por code
+    const { data: pool, error: findErr } = await this.supabase
+      .from('pools')
+      .select('id, name, code')
+      .eq('code', inputCode.trim())
+      .maybeSingle();
+
+    if (findErr) throw findErr;
+    if (!pool) { this.poolsError.set('Código inválido.'); return; }
+
+    // 2) insertar membresía como member
+    const { error: insErr } = await this.supabase
+      .from('pool_members')
+      .insert({ pool_id: pool.id, user_id: user.id, role: 'member' });
+
+    if (insErr && insErr.code !== '23505') throw insErr;
+
+    await this.loadUserPools();
+  } catch (err) {
+    console.error(err);
+    const msg = err instanceof Error ? err.message : 'No se pudo unir al pool.';
+    this.poolsError.set(msg);
+  } finally {
+    this.poolsLoading.set(false);
+  }
+}
+
 
   // Picks
   makePick(matchId: number, winnerId: number): void {
